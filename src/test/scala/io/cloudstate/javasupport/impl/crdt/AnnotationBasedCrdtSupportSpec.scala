@@ -5,7 +5,6 @@ import java.util.Optional
 import com.example.shoppingcart.Shoppingcart
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{ByteString, Any => JavaPbAny}
-import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import io.cloudstate.javasupport._
 import io.cloudstate.javasupport.crdt.{Crdt, CrdtContext, CrdtCreationContext, CrdtEntity, Vote}
@@ -31,7 +30,7 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
 
   object MockCreationContext extends MockCreationContext(None)
   class MockCreationContext(crdt: Option[Crdt] = None)
-      extends CrdtCreationContext
+    extends CrdtCreationContext
       with BaseContext
       with CrdtFactoryContext {
     override def entityId(): String = "foo"
@@ -60,16 +59,15 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
   }
 
   case class Wrapped(value: String)
-  val descriptor = Shoppingcart.getDescriptor
-    .findServiceByName("ShoppingCart")
-    .findMethodByName("AddItem")
+  val serviceDescriptor = Shoppingcart.getDescriptor.findServiceByName("ShoppingCart")
+  val descriptor = serviceDescriptor.findMethodByName("AddItem")
   val method = ResolvedServiceMethod(descriptor, StringResolvedType, WrappedResolvedType)
 
   def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) =
     new AnnotationBasedCrdtSupport(behavior.getClass,
-                                   anySupport,
-                                   methods.map(m => m.descriptor.getName -> m).toMap,
-                                   Some(_ => behavior)).create(new MockCreationContext())
+      anySupport,
+      methods.map(m => m.descriptor.getName -> m).toMap,
+      Some(_ => behavior)).create(new MockCreationContext())
 
   def create(clazz: Class[_], crdt: Option[Crdt] = None) =
     new AnnotationBasedCrdtSupport(clazz, anySupport, Map.empty, None).create(new MockCreationContext(crdt))
@@ -95,7 +93,7 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
 
       "there is an optional CRDT constructor and the CRDT is the wrong type" in {
         an[IllegalStateException] should be thrownBy create(classOf[OptionalCrdtConstructorTest],
-                                                            Some(MockCreationContext.newGCounter()))
+          Some(MockCreationContext.newGCounter()))
       }
 
       "there is a CRDT constructor and the CRDT is non empty" in {
@@ -108,10 +106,21 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
 
       "there is a CRDT constructor and the CRDT is the wrong type" in {
         an[IllegalStateException] should be thrownBy create(classOf[CrdtConstructorTest],
-                                                            Some(MockCreationContext.newGCounter()))
+          Some(MockCreationContext.newGCounter()))
+      }
+
+      "there is a provided entity factory" in {
+        val factory = new EntityFactory {
+          override def create(context: EntityContext): AnyRef = new CrdtFactoryTest(context)
+          override def entityClass: Class[_] = classOf[CrdtFactoryTest]
+        }
+        val crdtSupport = new AnnotationBasedCrdtSupport(factory, anySupport, serviceDescriptor)
+        crdtSupport.create(MockCreationContext)
       }
 
     }
+
+    // TODO: CRDT command handlers should be tested
   }
 }
 
@@ -131,4 +140,10 @@ private class OptionalCrdtConstructorTest(crdt: Optional[Vote]) {
 @CrdtEntity
 private class CrdtConstructorTest(crdt: Vote) {
   crdt shouldBe a[Vote]
+}
+
+@CrdtEntity
+private class CrdtFactoryTest(ctx: EntityContext) {
+  ctx shouldBe a[CrdtCreationContext]
+  ctx.entityId should ===("foo")
 }

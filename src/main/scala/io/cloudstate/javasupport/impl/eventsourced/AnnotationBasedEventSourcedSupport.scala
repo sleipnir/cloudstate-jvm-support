@@ -9,21 +9,27 @@ import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEnt
 
 import scala.collection.concurrent.TrieMap
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.ServiceCallFactory
+import io.cloudstate.javasupport.{EntityFactory, ServiceCallFactory}
 
 /**
  * Annotation based implementation of the [[EventSourcedEntityFactory]].
  */
 private[impl] class AnnotationBasedEventSourcedSupport(
-    entityClass: Class[_],
-    anySupport: AnySupport,
-    override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
-    factory: Option[EventSourcedEntityCreationContext => AnyRef] = None
-) extends EventSourcedEntityFactory
-    with ResolvedEntityFactory {
+                                                        entityClass: Class[_],
+                                                        anySupport: AnySupport,
+                                                        override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
+                                                        factory: Option[EventSourcedEntityCreationContext => AnyRef] = None
+                                                      ) extends EventSourcedEntityFactory
+  with ResolvedEntityFactory {
 
   def this(entityClass: Class[_], anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
     this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
+
+  def this(factory: EntityFactory, anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
+    this(factory.entityClass,
+      anySupport,
+      anySupport.resolveServiceDescriptor(serviceDescriptor),
+      Some(context => factory.create(context)))
 
   private val behavior = EventBehaviorReflection(entityClass, resolvedMethods)
 
@@ -115,11 +121,11 @@ private[impl] class AnnotationBasedEventSourcedSupport(
 }
 
 private class EventBehaviorReflection(
-    eventHandlers: Map[Class[_], EventHandlerInvoker],
-    val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext]],
-    snapshotHandlers: Map[Class[_], SnapshotHandlerInvoker],
-    val snapshotInvoker: Option[SnapshotInvoker]
-) {
+                                       eventHandlers: Map[Class[_], EventHandlerInvoker],
+                                       val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext]],
+                                       snapshotHandlers: Map[Class[_], SnapshotHandlerInvoker],
+                                       val snapshotInvoker: Option[SnapshotInvoker]
+                                     ) {
 
   /**
    * We use a cache in addition to the info we've discovered by reflection so that an event handler can be declared
@@ -182,7 +188,7 @@ private object EventBehaviorReflection {
         })
 
         new ReflectionHelper.CommandHandlerInvoker[CommandContext](ReflectionHelper.ensureAccessible(method),
-                                                                   serviceMethod)
+          serviceMethod)
       }
       .groupBy(_.serviceMethod.name)
       .map {
@@ -231,7 +237,7 @@ private object EventBehaviorReflection {
 }
 
 private class EntityConstructorInvoker(constructor: Constructor[_])
-    extends (EventSourcedEntityCreationContext => AnyRef) {
+  extends (EventSourcedEntityCreationContext => AnyRef) {
   private val parameters = ReflectionHelper.getParameterHandlers[EventSourcedEntityCreationContext](constructor)()
   parameters.foreach {
     case MainArgumentParameterHandler(clazz) =>

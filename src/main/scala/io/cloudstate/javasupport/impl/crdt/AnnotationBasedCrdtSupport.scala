@@ -7,7 +7,7 @@ import java.util.function.Consumer
 import scala.annotation.unchecked
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.{Context, ServiceCall, ServiceCallFactory}
+import io.cloudstate.javasupport.{Context, EntityFactory, ServiceCall, ServiceCallFactory}
 import io.cloudstate.javasupport.crdt.{
   CommandContext,
   CommandHandler,
@@ -56,11 +56,17 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_],
                                                anySupport: AnySupport,
                                                override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
                                                factory: Option[CrdtCreationContext => AnyRef] = None)
-    extends CrdtEntityFactory
+  extends CrdtEntityFactory
     with ResolvedEntityFactory {
   // TODO JavaDoc
   def this(entityClass: Class[_], anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
     this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
+
+  def this(factory: EntityFactory, anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
+    this(factory.entityClass,
+      anySupport,
+      anySupport.resolveServiceDescriptor(serviceDescriptor),
+      Some(context => factory.create(context)))
 
   private val constructor: CrdtCreationContext => AnyRef = factory.getOrElse {
     entityClass.getConstructors match {
@@ -135,7 +141,7 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_],
       val maybeResult = streamedCommandHandlers.get(context.commandName()).map { handler =>
         val adaptedContext =
           new AdaptedStreamedCommandContext(context,
-                                            handler.serviceMethod.outputType.asInstanceOf[ResolvedType[AnyRef]])
+            handler.serviceMethod.outputType.asInstanceOf[ResolvedType[AnyRef]])
         handler.invoke(entity, command, adaptedContext)
       }
 
@@ -188,11 +194,11 @@ private object CrdtAnnotationHelper {
     }
 
   def crdtParameterHandlers[C <: CrdtContext with CrdtFactory]
-      : PartialFunction[MethodParameter, ParameterHandler[C]] = {
+  : PartialFunction[MethodParameter, ParameterHandler[C]] = {
     case crdt if injectorMap.contains(crdt.parameterType) =>
       new CrdtParameterHandler[C, Crdt, AnyRef](injectorMap(crdt.parameterType), crdt.method)
     case crdt
-        if crdt.parameterType == classOf[Optional[_]] &&
+      if crdt.parameterType == classOf[Optional[_]] &&
         injectorMap.contains(ReflectionHelper.getFirstParameter(crdt.genericParameterType)) =>
       new OptionalCrdtParameterHandler(
         injectorMap(ReflectionHelper.getFirstParameter(crdt.genericParameterType)),
@@ -202,7 +208,7 @@ private object CrdtAnnotationHelper {
 
   private class CrdtParameterHandler[C <: CrdtContext with CrdtFactory, D <: Crdt, T](injector: CrdtInjector[D, T],
                                                                                       method: Executable)
-      extends ParameterHandler[C] {
+    extends ParameterHandler[C] {
     override def apply(ctx: InvocationContext[C]): AnyRef = {
       val state = ctx.context.state(injector.crdtClass)
       if (state.isPresent) {
@@ -214,7 +220,7 @@ private object CrdtAnnotationHelper {
   }
 
   private class OptionalCrdtParameterHandler[C <: Crdt, T](injector: CrdtInjector[C, T], method: Executable)
-      extends ParameterHandler[CrdtContext] {
+    extends ParameterHandler[CrdtContext] {
 
     import scala.compat.java8.OptionConverters._
     override def apply(ctx: InvocationContext[CrdtContext]): AnyRef =
@@ -225,7 +231,7 @@ private object CrdtAnnotationHelper {
 
 private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandContext[JavaPbAny],
                                                   resolvedType: ResolvedType[AnyRef])
-    extends StreamedCommandContext[AnyRef] {
+  extends StreamedCommandContext[AnyRef] {
   override def isStreamed: Boolean = delegate.isStreamed
 
   def onChange(subscriber: function.Function[SubscriptionContext, Optional[AnyRef]]): Unit =
