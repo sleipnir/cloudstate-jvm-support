@@ -10,7 +10,6 @@ import com.google.protobuf.{
   CodedInputStream,
   CodedOutputStream,
   Descriptors,
-  GeneratedMessage,
   Parser,
   UnsafeByteOperations,
   WireFormat,
@@ -19,8 +18,15 @@ import com.google.protobuf.{
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.jvmsupport.Jsonable
 import io.cloudstate.jvmsupport.impl.AnySupport.Prefer.{Java, Scala}
+import io.cloudstate.jvmsupport.impl.{
+  JacksonResolvedType,
+  JavaPbResolvedType,
+  ResolvedServiceMethod,
+  ResolvedType,
+  ScalaPbResolvedType
+}
 import org.slf4j.LoggerFactory
-import scalapb.GeneratedMessageCompanion
+import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 import scalapb.options.Scalapb
 
 import scala.collection.concurrent.TrieMap
@@ -304,13 +310,11 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor],
   def resolveServiceDescriptor(
       serviceDescriptor: Descriptors.ServiceDescriptor
   ): Map[String, ResolvedServiceMethod[_, _]] =
-    //mapAsJavaMap(
     serviceDescriptor.getMethods.asScala.map { method =>
       method.getName -> ResolvedServiceMethod(method,
                                               resolveTypeDescriptor(method.getInputType),
                                               resolveTypeDescriptor(method.getOutputType))
     }.toMap
-  //) //.toMap
 
   private def resolveTypeUrl(typeName: String): Option[ResolvedType[_]] =
     allTypes.get(typeName).map(resolveTypeDescriptor)

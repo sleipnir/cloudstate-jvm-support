@@ -1,4 +1,4 @@
-package io.cloudstate.javasupport.impl.eventsourced
+package io.cloudstate.jvmsupport.impl.eventsourced
 
 import java.lang.reflect.{Constructor, InvocationTargetException, Method}
 import java.util.Optional

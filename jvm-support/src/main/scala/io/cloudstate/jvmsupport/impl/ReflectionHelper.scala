@@ -9,7 +9,7 @@ import com.google.protobuf.{Any => JavaPbAny}
 
 import scala.reflect.ClassTag
 
-private[impl] object ReflectionHelper {
+object ReflectionHelper {
 
   def getAllDeclaredMethods(clazz: Class[_]): Seq[Method] =
     if (clazz.getSuperclass == null || clazz.getSuperclass == classOf[Object]) {
