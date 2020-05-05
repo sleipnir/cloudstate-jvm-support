@@ -4,6 +4,10 @@ import java.util.Date
 import sbt.Keys.{developers, scmInfo}
 import sbt.url
 
+name := "cloudstate-jvm-support"
+version := "0.5.0"
+scalaVersion := "2.12.11"
+
 inThisBuild(
   Seq(
     organization := "io.cloudstate",
@@ -45,12 +49,6 @@ def versionFmt(out: sbtdynver.GitDescribeOutput): String = {
   else out.ref.dropV.value + out.commitSuffix.mkString("-", "-", "") + dirtySuffix
 }
 
-name := "jvm-support"
-
-version := "0.1"
-
-scalaVersion := "2.13.2"
-
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.5.0"
 val AkkaVersion = "2.5.31"
@@ -75,6 +73,7 @@ lazy val root = (project in file("."))
   // Don't forget to add your sbt module here!
   // A missing module here can lead to failing Travis test results
   .aggregate(
+    `protocols`,
     `jvm-support`
   )
   .settings(common)
